@@ -12,7 +12,6 @@ sudo pacman -S --needed \
   gdm \
   gnome-shell \
   gnome-control-center \
-  gnome-tweaks \
   gnome-keyring \
   gnome-text-editor \
   gnome-console \
@@ -97,6 +96,9 @@ old-files-age=uint32 7
 [org/gnome/system/location]
 enabled=false
 
+[org/gnome/desktop/search-providers]
+disable-external=true
+
 [org/gnome/desktop/background]
 primary-color='#000000'
 secondary-color='#000000'
@@ -119,6 +121,23 @@ theme='auto'
 DCONF
 
 sudo dconf update
+
+# --- Desactivar tracker/localsearch (indexador de archivos) ---
+# Equivalente a Baloo off en KDE. Reduce CPU idle 12-34%, extiende bateria.
+# Renombrado a localsearch en GNOME 47+, pero los services mantienen nombre tracker.
+sudo -u "$USERNAME" systemctl --user mask \
+  tracker-miner-fs-3.service \
+  tracker-extract-3.service \
+  tracker-miner-fs-control-3.service \
+  tracker-writeback-3.service 2>/dev/null || true
+
+# --- Desactivar evolution-data-server (calendario/contactos en background) ---
+# Solo necesario si usas GNOME Calendar o contactos integrados.
+# Sin esto, el reloj del panel no muestra eventos pero ahorra wakeups.
+sudo -u "$USERNAME" systemctl --user mask \
+  evolution-addressbook-factory.service \
+  evolution-calendar-factory.service \
+  evolution-source-registry.service 2>/dev/null || true
 
 # --- Script de usuario ---
 cat > "$HOME_DIR/gnome-setup.sh" <<'SCRIPT'
@@ -157,6 +176,9 @@ if command -v flatpak &>/dev/null; then
   sudo flatpak override --filesystem=xdg-config/gtk-4.0:ro
   sudo flatpak override --env=GTK_THEME=Adwaita-dark
 fi
+
+# Desactivar GNOME Online Accounts daemon (si no usas cuentas Google/Microsoft)
+systemctl --user mask goa-daemon.service 2>/dev/null || true
 
 # --- OLED adaptive: ajusta brillo de texto via dconf segun brillo de pantalla ---
 # Nota: GTK4/libadwaita no relee gtk.css en caliente.
