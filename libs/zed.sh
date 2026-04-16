@@ -1,6 +1,7 @@
 #!/bin/bash
-# Arch Linux — Zed editor optimizado
-# Post archlinux2.md base install
+# Zed editor — Instalacion y configuracion optimizada
+# OLED, GPU Vulkan AMD, telemetria off, huella minima
+# IA desactivada por defecto — configurar con: bash libs/zed-ai.sh
 set -e
 
 USERNAME=$(getent passwd 1000 | cut -d: -f1)
@@ -15,24 +16,20 @@ sudo -u "$USERNAME" mkdir -p "$CFG"
 
 cat > "$CFG/settings.json" <<'EOF'
 {
-  // Fuentes (hereda fontconfig del base: hintnone, antialias, sin subpixel)
   "buffer_font_family": "JetBrains Mono",
   "buffer_font_size": 14,
   "buffer_line_height": 1.6,
   "ui_font_family": "Inter",
   "ui_font_size": 14,
 
-  // Tema OLED
   "theme": {
     "mode": "dark",
     "dark": "One Dark",
     "light": "One Dark"
   },
 
-  // Rendering GPU (Vulkan AMD)
   "gpu": true,
 
-  // Editor
   "tab_size": 2,
   "hard_tabs": false,
   "format_on_save": "on",
@@ -47,7 +44,6 @@ cat > "$CFG/settings.json" <<'EOF'
   "inlay_hints": { "enabled": true },
   "soft_wrap": "editor_width",
 
-  // Terminal integrado
   "terminal": {
     "font_family": "JetBrains Mono",
     "font_size": 13,
@@ -56,16 +52,13 @@ cat > "$CFG/settings.json" <<'EOF'
     "env": {}
   },
 
-  // Telemetria desactivada
   "telemetry": {
     "diagnostics": false,
     "metrics": false
   },
 
-  // Wayland nativo
   "use_system_path_prompts": true,
 
-  // Rendimiento
   "file_scan_exclusions": [
     "**/.git",
     "**/node_modules",
@@ -73,16 +66,23 @@ cat > "$CFG/settings.json" <<'EOF'
     "**/.cache",
     "**/dist",
     "**/__pycache__",
-    "**/.venv"
+    "**/.venv",
+    "**/build",
+    "**/.flatpak-builder"
   ],
 
-  // Desactivar IA por defecto (se configura en zed-ai.sh)
   "features": {
     "copilot": false
   },
   "assistant": {
     "enabled": false
-  }
+  },
+
+  "auto_update": false,
+  "show_whats_new": false,
+  "collaboration_panel": { "button": false },
+  "notification_panel": { "button": false },
+  "chat_panel": { "button": false }
 }
 EOF
 
@@ -106,13 +106,13 @@ chown -R "$USERNAME:users" "$CFG"
 echo ""
 echo "=== Zed editor configurado ==="
 echo ""
-echo "Optimizaciones:"
-echo "  GPU Vulkan (AMD)     → Rendering acelerado"
-echo "  JetBrains Mono       → Fuente codigo (fontconfig base)"
-echo "  Inter                → Fuente UI"
-echo "  Nushell              → Terminal integrado"
-echo "  Telemetria off       → Sin tracking"
-echo "  IA desactivada       → Configurar con zed-ai.sh"
-echo "  OLED dark theme      → One Dark"
+echo "  GPU Vulkan AMD    Rendering acelerado"
+echo "  JetBrains Mono    Fuente codigo"
+echo "  Inter             Fuente UI"
+echo "  Nushell           Terminal integrado"
+echo "  Telemetria off    Sin tracking"
+echo "  Auto-update off   Se actualiza via pacman"
+echo "  OLED dark         One Dark"
+echo "  IA desactivada    Configurar con: bash libs/zed-ai.sh"
 echo ""
 echo "Ejecutar: zed"

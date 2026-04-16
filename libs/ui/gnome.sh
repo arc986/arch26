@@ -25,8 +25,7 @@ sudo pacman -S --needed \
   xdg-user-dirs-gtk \
   gvfs \
   gvfs-mtp \
-  papirus-icon-theme \
-  flatpak
+  papirus-icon-theme
 
 # --- Crear directorios ---
 sudo -u "$USERNAME" xdg-user-dirs-update
@@ -170,12 +169,6 @@ tooltip {
   border: 1px solid #1a1a1a;
 }
 GTKCSS
-
-# Flatpak dark theme
-if command -v flatpak &>/dev/null; then
-  sudo flatpak override --filesystem=xdg-config/gtk-4.0:ro
-  sudo flatpak override --env=GTK_THEME=Adwaita-dark
-fi
 
 # Desactivar GNOME Online Accounts daemon (si no usas cuentas Google/Microsoft)
 systemctl --user mask goa-daemon.service 2>/dev/null || true

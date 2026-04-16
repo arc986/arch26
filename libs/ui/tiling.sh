@@ -217,14 +217,6 @@ fixed="JetBrains Mono,11,-1,5,50,0,0,0,0,0"
 general="Inter,10,-1,5,50,0,0,0,0,0"
 EOF
 
-# --- Flatpak dark theme override ---
-if command -v flatpak &>/dev/null; then
-  sudo flatpak override --filesystem=xdg-config/gtk-3.0:ro
-  sudo flatpak override --filesystem=xdg-config/gtk-4.0:ro
-  sudo flatpak override --env=GTK_THEME=Adwaita-dark
-  sudo flatpak override --env=ICON_THEME=Papirus-Dark
-fi
-
 # --- Variables Qt para dark theme (solo tiling WM) ---
 sudo -u "$USERNAME" mkdir -p "$CFG/environment.d"
 cat > "$CFG/environment.d/qt-theme.conf" <<'EOF'

@@ -1,4 +1,4 @@
-sudo pacman -S sddm plasma-desktop kwin qt6-wayland systemsettings xdg-desktop-portal-kde bluedevil dolphin konsole plasma-nm plasma-pa sddm-kcm kde-gtk-config colord-kde plasma-disks kinfocenter kscreenlocker ocean-sound-theme breeze-gtk kscreen breeze-icons ark gwenview okular kcalc haruna kwrite vulkan-mesa-layers fwupd kdegraphics-thumbnailers ffmpegthumbs dolphin-plugins kpipewire flatpak
+sudo pacman -S sddm plasma-desktop kwin qt6-wayland systemsettings xdg-desktop-portal-kde bluedevil dolphin konsole plasma-nm plasma-pa sddm-kcm kde-gtk-config colord-kde plasma-disks kinfocenter kscreenlocker ocean-sound-theme breeze-gtk kscreen breeze-icons ark gwenview okular kcalc haruna kwrite vulkan-mesa-layers fwupd kdegraphics-thumbnailers ffmpegthumbs dolphin-plugins kpipewire
 
 # 1. SDDM Wayland nativo
 sudo mkdir -p /etc/sddm.conf.d
