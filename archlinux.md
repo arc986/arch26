@@ -216,7 +216,7 @@ systemctl enable bluetooth upower NetworkManager power-profiles-daemon nftables 
 ## Fuentes
 
 ```bash
-ln -s /usr/share/fontconfig/conf.avail/70-no-bitmaps.conf /etc/fonts/conf.d/;rm -f /etc/fonts/conf.d/10-hinting-slight.conf /etc/fonts/conf.d/10-hinting-full.conf
+ln -sf /usr/share/fontconfig/conf.avail/70-no-bitmaps.conf /etc/fonts/conf.d/;rm -f /etc/fonts/conf.d/10-hinting-slight.conf /etc/fonts/conf.d/10-hinting-full.conf
 echo 'FREETYPE_PROPERTIES=cff:no-stem-darkening=0 truetype:interpreter-version=40' >> /etc/environment
 ```
 

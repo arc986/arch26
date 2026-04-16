@@ -103,7 +103,7 @@ USERNAME="$2"
 echo "$PCNAME" > /etc/hostname
 printf '127.0.0.1 localhost %s\n::1 localhost %s\n' "$PCNAME" "$PCNAME" >> /etc/hosts
 ln -sf /usr/share/zoneinfo/America/Panama /etc/localtime
-hwclock --systohc
+hwclock --systohc || true
 
 printf 'LANG=es_PA.UTF-8\nLC_TIME=C\nLC_COLLATE=C\n# Forzar Wayland nativo\nMOZ_ENABLE_WAYLAND=1\nELECTRON_OZONE_PLATFORM_HINT=wayland\nQT_QPA_PLATFORM=wayland;xcb\nSDL_VIDEODRIVER=wayland\n' >> /etc/environment
 
@@ -115,11 +115,11 @@ printf 'KEYMAP=la-latin1\nFONT=ter-132n\n' > /etc/vconsole.conf
 
 # ── Bootloader ──
 grub-install --efi-directory=/efi --bootloader-id='Arch Linux' --target=x86_64-efi
-echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
+grep -q 'GRUB_DISABLE_OS_PROBER' /etc/default/grub || echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
 sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="zswap.enabled=0 amd_pstate=active amdgpu.abmlevel=1 amdgpu.dither=1 nowatchdog nmi_watchdog=0 iommu=pt quiet loglevel=3"/' /etc/default/grub
 
 # ── Kernel y compresion ──
-sed -i -e 's/MODULES=()/MODULES=(amdgpu)/' -e 's/^#\?COMPRESSION="zstd"/COMPRESSION="zstd"/' /etc/mkinitcpio.conf
+sed -i -e 's/MODULES=()/MODULES=(asus_wmi amdgpu)/' -e 's/^#\?COMPRESSION="zstd"/COMPRESSION="zstd"/' /etc/mkinitcpio.conf
 mkinitcpio -P
 grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -155,10 +155,10 @@ sed -i 's/^#\?NAutoVTs=6/NAutoVTs=2/' /etc/systemd/logind.conf
 
 # ── Usuario ──
 echo "Establece la contrasena de root:"
-passwd
+until passwd; do echo "Intenta de nuevo:"; done
 useradd -m -g users -G wheel -s /usr/bin/nu "$USERNAME"
 echo "Establece la contrasena de $USERNAME:"
-passwd "$USERNAME"
+until passwd "$USERNAME"; do echo "Intenta de nuevo:"; done
 echo "$USERNAME:100000:65536" | tee -a /etc/subuid >> /etc/subgid
 sed -i 's/^#\s*%wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
 
@@ -170,7 +170,7 @@ systemctl enable bluetooth upower NetworkManager power-profiles-daemon nftables 
 systemctl disable man-db.timer shadow.timer
 
 # ── Fuentes ──
-ln -s /usr/share/fontconfig/conf.avail/70-no-bitmaps.conf /etc/fonts/conf.d/
+ln -sf /usr/share/fontconfig/conf.avail/70-no-bitmaps.conf /etc/fonts/conf.d/
 rm -f /etc/fonts/conf.d/10-hinting-slight.conf /etc/fonts/conf.d/10-hinting-full.conf
 echo 'FREETYPE_PROPERTIES=cff:no-stem-darkening=0 truetype:interpreter-version=40' >> /etc/environment
 
