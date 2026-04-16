@@ -125,7 +125,12 @@ sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="zswap.enabl
 ## Kernel y compresion
 
 ```bash
-sed -i -e 's/MODULES=()/MODULES=(asus_wmi amdgpu)/' -e 's/^#\?COMPRESSION="zstd"/COMPRESSION="zstd"/' /etc/mkinitcpio.conf
+# Si es ASUS: MODULES=(asus_wmi amdgpu) | Si no: MODULES=(amdgpu)
+MODULES="amdgpu"
+if dmidecode -s system-manufacturer 2>/dev/null | grep -qi asus; then
+  MODULES="asus_wmi amdgpu"
+fi
+sed -i -e 's/MODULES=()/MODULES=($MODULES)/' -e 's/^#\?COMPRESSION="zstd"/COMPRESSION="zstd"/' /etc/mkinitcpio.conf
 ```
 
 ```bash

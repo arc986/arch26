@@ -119,7 +119,11 @@ grep -q 'GRUB_DISABLE_OS_PROBER' /etc/default/grub || echo 'GRUB_DISABLE_OS_PROB
 sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="zswap.enabled=0 amd_pstate=active amdgpu.abmlevel=1 amdgpu.dither=1 nowatchdog nmi_watchdog=0 iommu=pt quiet loglevel=3"/' /etc/default/grub
 
 # ── Kernel y compresion ──
-sed -i -e 's/MODULES=()/MODULES=(asus_wmi amdgpu)/' -e 's/^#\?COMPRESSION="zstd"/COMPRESSION="zstd"/' /etc/mkinitcpio.conf
+MODULES="amdgpu"
+if dmidecode -s system-manufacturer 2>/dev/null | grep -qi asus; then
+  MODULES="asus_wmi amdgpu"
+fi
+sed -i -e "s/MODULES=()/MODULES=($MODULES)/" -e 's/^#\?COMPRESSION="zstd"/COMPRESSION="zstd"/' /etc/mkinitcpio.conf
 mkinitcpio -P
 grub-mkconfig -o /boot/grub/grub.cfg
 
