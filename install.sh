@@ -171,7 +171,7 @@ mkdir -p /etc/NetworkManager/conf.d
 printf '[device]\nwifi.backend=iwd\n' > /etc/NetworkManager/conf.d/iwd.conf
 printf '[connection]\nwifi.powersave = 3\n' > /etc/NetworkManager/conf.d/wifi-powersave.conf
 systemctl enable bluetooth upower NetworkManager power-profiles-daemon nftables iwd systemd-resolved
-systemctl disable man-db.timer shadow.timer
+systemctl disable shadow.timer
 
 # ── Fuentes ──
 ln -sf /usr/share/fontconfig/conf.avail/70-no-bitmaps.conf /etc/fonts/conf.d/
