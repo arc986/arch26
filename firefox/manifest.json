@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "OLED Ultra Dark",
+  "version": "1.0",
+  "description": "Ultra optimized dark mode for OLED screens. Pure blacks and eye-friendly text.",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "css": ["oled-dark.css"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "oled-ultra-dark@arch26.local"
+    }
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  }
+}

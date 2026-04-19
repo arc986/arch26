@@ -1,0 +1,84 @@
+/* OLED Ultra Dark v1.5 - Safe Transparency & Media Protection */
+
+:root {
+    color-scheme: dark !important;
+    --oled-black: #000000;
+    --oled-surface: #0a0a0a;
+    --oled-text: #9ca3af;
+    --oled-heading: #d1d5db;
+    --oled-link: #60a5fa;
+    --oled-border: #1f2937;
+}
+
+/* 1. THE FOUNDATION
+   Force the root to be black. Every transparent element will show this. */
+html, body {
+    background-color: var(--oled-black) !important;
+    background-image: none !important;
+    color: var(--oled-text) !important;
+}
+
+/* 2. SMART TRANSPARENCY
+   Instead of painting everything black, we make elements transparent 
+   so they "see through" to the black HTML background. 
+   This avoids covering videos and complex UI layers. */
+div, section, article, nav, header, footer, main, form, ul, table, aside, blockquote {
+    background-color: transparent !important;
+    border-color: var(--oled-border) !important;
+}
+
+/* 3. READABILITY & COLOR FORCE */
+p, span, li, td, dt, dd, label, small, b, strong {
+    color: inherit !important; /* Inherit the text color from body */
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--oled-heading) !important;
+}
+
+/* 4. SURFACE & DEPTH (Design Respect)
+   We only apply a slight background to specific interactive elements 
+   to maintain visibility and hierarchy. */
+[role="dialog"], [role="menu"], [role="tooltip"], 
+.infobox, .card, .popup, .modal, .dropdown-menu, .toc, .navbox {
+    background-color: var(--oled-surface) !important;
+    border: 1px solid var(--oled-border) !important;
+}
+
+/* 5. LINKS */
+a, a * {
+    color: var(--oled-link) !important;
+    text-decoration: none !important;
+}
+
+/* 6. FORM ELEMENTS & INTERACTIVES
+   Inputs and buttons MUST have a background to be usable. */
+input, textarea, select, button, pre, code {
+    background-color: #111827 !important;
+    color: var(--oled-heading) !important;
+    border: 1px solid var(--oled-border) !important;
+}
+
+/* 7. MEDIA PROTECTION (CRITICAL)
+   We ensure images and videos are never affected by background overrides. */
+img, video, iframe, canvas, object, embed {
+    background-color: transparent !important;
+    filter: brightness(0.9) contrast(1.1) !important;
+}
+
+/* 8. BACKGROUND IMAGES
+   We no longer kill background-images globally to prevent breaking icons/UI. */
+[style*="background-image"] {
+    /* Let the background-image show */
+}
+
+/* 9. SCROLLBARS */
+* {
+    scrollbar-color: #333 #000 !important;
+}
+
+/* 10. TEXT SELECTION */
+::selection {
+    background-color: rgba(96, 165, 250, 0.2) !important;
+    color: #ffffff !important;
+}
