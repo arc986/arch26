@@ -1,35 +1,59 @@
 #!/bin/bash
-# Firefox — Instalacion + hardening (telemetria, privacidad, rendimiento)
-# Ejecutar despues de instalar cualquier UI (tiling/plasma/gnome)
+# Firefox — Instalación + hardening (telemetria, privacidad, rendimiento)
+# Ejecutar después de instalar cualquier UI (tiling/plasma/gnome)
 set -e
 
+# Detectar usuario real (el que no es root)
 USERNAME=$(getent passwd 1000 | cut -d: -f1)
 HOME_DIR="/home/$USERNAME"
 
-# --- Instalar Firefox + idioma ---
-sudo pacman -S --needed firefox firefox-i18n-es-mx
+echo "Configurando Firefox para el usuario: $USERNAME"
 
-# --- Esperar a que exista un perfil ---
+# --- Instalar Firefox + idioma ---
+sudo pacman -S --needed --noconfirm firefox firefox-i18n-es-mx
+
+# --- Forzar creación de estructura de directorios ---
 PROFILES_DIR="$HOME_DIR/.mozilla/firefox"
-if [ ! -d "$PROFILES_DIR" ]; then
-  echo "Creando perfil inicial de Firefox..."
-  sudo -u "$USERNAME" firefox --headless &
-  sleep 3
-  kill %1 2>/dev/null || true
-  sleep 1
+sudo -u "$USERNAME" mkdir -p "$PROFILES_DIR"
+
+# --- Generar perfil si no existe ---
+# Buscamos si existe algún directorio que termine en .default o .default-release
+if ! find "$PROFILES_DIR" -maxdepth 1 -name "*.default*" -type d | grep -q .; then
+  echo "Creando perfil inicial de Firefox (headless)..."
+  sudo -u "$USERNAME" firefox --headless > /dev/null 2>&1 &
+  FPID=$!
+  
+  # Esperar hasta 15 segundos a que Firefox cree los archivos
+  TIMEOUT=15
+  while [ $TIMEOUT -gt 0 ]; do
+    PROFILE_PATH=$(find "$PROFILES_DIR" -maxdepth 1 -name "*.default*" -type d | head -1)
+    if [ -n "$PROFILE_PATH" ]; then
+      echo "Perfil encontrado en: $PROFILE_PATH"
+      break
+    fi
+    sleep 1
+    ((TIMEOUT--))
+  done
+
+  kill $FPID 2>/dev/null || true
+  sleep 2
 fi
 
-# --- Detectar perfil ---
+# --- Detectar perfil final ---
 PROFILE=$(find "$PROFILES_DIR" -maxdepth 1 -name "*.default-release" -type d | head -1)
 if [ -z "$PROFILE" ]; then
   PROFILE=$(find "$PROFILES_DIR" -maxdepth 1 -name "*.default*" -type d | head -1)
 fi
-[ -z "$PROFILE" ] && echo "Error: no se encontro perfil de Firefox" && exit 1
 
-echo "Perfil: $PROFILE"
+if [ -z "$PROFILE" ]; then
+  echo "Error: No se pudo crear o encontrar el perfil de Firefox."
+  exit 1
+fi
+
+echo "Configurando perfil: $PROFILE"
 
 # --- user.js: hardening + privacidad + rendimiento ---
-cat > "$PROFILE/user.js" <<'USERJS'
+sudo -u "$USERNAME" cat > "$PROFILE/user.js" <<'USERJS'
 // === Telemetria: desactivar todo ===
 user_pref("toolkit.telemetry.enabled", false);
 user_pref("toolkit.telemetry.unified", false);
@@ -111,11 +135,7 @@ user_pref("media.ffmpeg.vaapi.enabled", true);
 user_pref("widget.dmabuf.force-enabled", true);
 
 // === OLED: forzar dark mode en contenido web ===
-// Le dice a las paginas "el usuario prefiere dark" via prefers-color-scheme
-// Sitios con dark mode (Google, YouTube, GitHub, etc.) lo activan automaticamente
-// Sin extensiones, sin overhead, sin manipulacion del DOM
 user_pref("layout.css.prefers-color-scheme.content-override", 0);
-// UI del navegador tambien en dark
 user_pref("ui.systemUsesDarkTheme", 1);
 user_pref("browser.theme.content-theme", 0);
 user_pref("browser.theme.toolbar-theme", 0);
@@ -156,7 +176,7 @@ user_pref("intl.accept_languages", "es-MX,es,en-US,en");
 user_pref("intl.locale.requested", "es-MX");
 USERJS
 
-# --- Enterprise policies: desactivar updates automaticos + crashreporter ---
+# --- Enterprise policies ---
 sudo mkdir -p /usr/lib/firefox/distribution
 sudo tee /usr/lib/firefox/distribution/policies.json > /dev/null <<'POLICIES'
 {
@@ -185,32 +205,19 @@ sudo tee /usr/lib/firefox/distribution/policies.json > /dev/null <<'POLICIES'
 }
 POLICIES
 
-# --- Eliminar crashreporter y pingsender del sistema ---
-# Se regeneran con updates, pero pacman NoExtract los mantiene fuera
+# --- Limpieza de binarios de telemetría ---
 for f in crashreporter minidump-analyzer pingsender; do
   sudo rm -f "/usr/lib/firefox/$f"
 done
 
-# Persistir eliminacion via pacman NoExtract
+# Persistir eliminación vía pacman NoExtract
 if ! grep -q "NoExtract.*crashreporter" /etc/pacman.conf 2>/dev/null; then
   sudo sed -i '/^\[options\]/a NoExtract = usr/lib/firefox/crashreporter usr/lib/firefox/minidump-analyzer usr/lib/firefox/pingsender' /etc/pacman.conf
 fi
 
-chown -R "$USERNAME:users" "$PROFILES_DIR"
+# Ajuste final de permisos
+sudo chown -R "$USERNAME:users" "$HOME_DIR/.mozilla"
 
 echo ""
-echo "=== Firefox instalado y optimizado ==="
-echo ""
-echo "Seguridad:     telemetria off, tracking protection, HTTPS-Only"
-echo "Privacidad:    sin Pocket, sin patrocinados, sin Safe Browsing"
-echo "Rendimiento:   Wayland nativo, GPU VA-API, cache 256MB, 4 procesos"
-echo "UI:            pestanas verticales, densidad compacta, sidebar oculto"
-echo "Extensiones:   uBlock Origin (bloqueador), Skip Redirect (anti-tracking)"
-echo "Updates:       via pacman (auto-update de Firefox desactivado)"
-echo ""
-echo "Las extensiones se instalan automaticamente al primer inicio."
-echo "Ambas tienen badge 'Recommended by Firefox' (auditadas por Mozilla)."
-echo ""
-echo "Nota: al abrir Firefox, la barra de pestanas horizontal puede"
-echo "seguir visible. Click derecho sobre ella → 'Ocultar barra de pestanas'"
-echo "para dejar solo las pestanas verticales en el sidebar."
+echo "=== Firefox instalado y optimizado con éxito ==="
+echo "Perfil configurado en: $PROFILE"
