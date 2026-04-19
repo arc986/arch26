@@ -1,96 +1,95 @@
-# nspawn — Contenedores systemd-nspawn optimizados
+# systemd-nspawn: Gestión de Contenedores Optimizada
 
-Host limpio. Cero paquetes extra (systemd ya incluye nspawn).
-Contenedores en btrfs (`@machines`) con snapshots nativos.
+Contenedores ultraligeros basados en `systemd-nspawn` sobre **Btrfs**, optimizados para desarrollo, infraestructura y aislamiento con huella cero en idle.
 
-## Principios
+> [!TIP]
+> **¿Eres nuevo?** Lee nuestro [Manual para Dummies](file:///c:/Users/david/Desktop/git/arch26/libs/nspawn/MANUAL.md) para aprender a usar todo el sistema paso a paso.
 
-- **Huella cero en idle**: CPUWeight (peso relativo, no reserva) + MemoryHigh (throttle suave)
-- **Bajo demanda**: si necesita mas recursos, los toma. Si no hace nada, consume nada
-- **Host limpio**: nada se instala automaticamente en el host
-- **Aislamiento real**: PrivateUsers, capabilities minimas, SystemCallFilter, Zones de red
+## 🚀 Guía Rápida del CLI
 
-## Estructura
+El punto de entrada principal es `nspawn-ctl.sh`. Casi todos los comandos aceptan **filtros** (ej. `start venv` inicia todos los contenedores que empiezan por `venv`).
 
-```
-nspawn/
-├── nspawn-ctl.sh       CLI principal
-├── lib/
-│   ├── common.sh       Funciones compartidas + recursos via service override
-│   └── profiles.sh     Perfiles .nspawn + limites por tipo
-└── setup/
-    ├── venv.sh         Desarrollo (Go/Python/Web/Rust)
-    ├── k3s.sh          Clusters K3s
-    ├── kvm.sh          KVM/QEMU aislado
-    └── box.sh          Generico (con/sin Podman)
-```
+| Acción | Uso | Descripción |
+|---|---|---|
+| `list` | `nspawn-ctl list [filtro]` | Tabla con tipo, estado, RAM y disco. |
+| `start` | `nspawn-ctl start [filtro]` | Inicia contenedores (soporta batch). |
+| `stop` | `nspawn-ctl stop [filtro]` | Detiene contenedores de forma segura. |
+| `shell` | `nspawn-ctl shell [nombre]` | Entra al contenedor. |
+| `logs` | `nspawn-ctl logs [nombre]` | Ver logs del sistema. |
+| `delete` | `nspawn-ctl delete [nombre]` | Elimina contenedor y configuración. |
 
-## Recursos: como funciona
+---
 
-El archivo `.nspawn` solo soporta `[Exec]`, `[Files]` y `[Network]`.
-Los limites de recursos van en el service unit de systemd:
+## 🛠️ Tipos de Entornos y Gestión Específica
 
-```
-/etc/systemd/system/systemd-nspawn@<nombre>.service.d/resources.conf
-```
+### 1. Desarrollo (`venv`)
+Entornos Alpine ligeros que comparten `~/Projects` con el host.
 
-| Directiva | Efecto |
-|---|---|
-| `CPUWeight=50` | Peso relativo. Idle = 0% CPU real. Bajo demanda si necesita |
-| `MemoryHigh=384M` | Throttle suave: frena sin matar |
-| `MemoryMax=512M` | OOM kill como ultimo recurso |
-| `MemorySwapMax=0` | Sin swap — todo en RAM o nada |
-| `TasksMax=128` | Anti fork bomb |
+*   **Crear**: `nspawn-ctl create venv [go|python|web|rust|all]`
+*   **Iniciar todos**: `nspawn-ctl start venv`
+*   **Entrar a uno**: `nspawn-ctl shell venv-go`
+*   **Detener todos**: `nspawn-ctl stop venv`
+*   **Borrar**: `nspawn-ctl delete venv-python`
 
-## CLI
+### 2. Clusters Kubernetes (`k3s`)
+Clusters locales aislados. kubectl se usa **dentro** del master para no ensuciar el host.
 
-```
-nspawn-ctl <accion> [filtro]
-```
+*   **Crear cluster**: `nspawn-ctl create k3s [nombre]`
+*   **Iniciar cluster**: `nspawn-ctl start k3s-[nombre]`
+*   **Ver nodos (kubectl)**: `sudo machinectl shell k3s-[nombre]-master -- kubectl get nodes`
+*   **Añadir worker**: Ejecuta `setup/k3s.sh` y elige la opción 2.
+*   **Borrar cluster**: `nspawn-ctl delete k3s-[nombre]-master` (repetir para workers).
 
-### Crear rapido (sin menus)
+### 3. Virtualización (`kvm`)
+Servidor de QEMU/KVM aislado. Permite correr ISOs o VMs reales dentro de nspawn.
 
-```bash
-nspawn-ctl create venv go
-nspawn-ctl create venv all
-nspawn-ctl create k3s lab
-nspawn-ctl create kvm cockpit
-nspawn-ctl create box test alpine
-```
+*   **Crear**: `nspawn-ctl create kvm [cockpit|virt|cli]`
+*   **Iniciar**: `nspawn-ctl start kvm-server`
+*   **Acceso Web**: `https://<IP>:9090` (Usuario: `root`, Pass: `kvm`).
+*   **Ver VMs**: `nspawn-ctl shell kvm-server -- virsh list --all`
+*   **Subir ISOs**: `sudo cp mi.iso /var/lib/machines/kvm-server/var/lib/libvirt/images/`
+*   **Borrar**: `nspawn-ctl delete kvm-server`
 
-### Crear interactivo
+### 4. Contenedores Genéricos (`box`)
+Contenedores de diversas distros, opcionalmente con Podman (Docker-in-nspawn).
 
-```bash
-nspawn-ctl create
-```
+*   **Crear**: `nspawn-ctl create box [nombre] [alpine|arch|debian]`
+*   **Iniciar**: `nspawn-ctl start box-[nombre]`
+*   **Entrar**: `nspawn-ctl shell box-[nombre]`
+*   **Probar Podman**: `podman run --rm -it alpine sh` (dentro del box).
+*   **Borrar**: `nspawn-ctl delete box-[nombre]`
 
-### Acciones
+---
 
-| Accion | Descripcion |
-|---|---|
-| `list [filtro]` | Tabla: tipo, nombre, estado, RAM real, disco |
-| `status` | Estado + config .nspawn + recursos |
-| `start [filtro]` | Iniciar (1 = directo, N = batch) |
-| `stop [filtro]` | Detener (1 = directo, N = batch) |
-| `shell [filtro]` | Entrar a un contenedor |
-| `logs` | Ver logs (journalctl -M) |
-| `resources` | RAM/CPU en vivo (systemd-cgtop) |
-| `snapshot` | Crear snapshot btrfs |
-| `ephemeral` | Copia desechable (cambios se pierden) |
-| `delete` | Eliminar contenedor + config + overrides |
-| `config` | Ver archivo .nspawn |
-| `commands` | Cheatsheet |
+## ⚡ Recursos, Límites y Mantenimiento
 
-## Filtros por prefijo
+### Control de Recursos
+Los límites son dinámicos y se gestionan vía systemd-slices.
+*   **CPUWeight**: Prioridad baja (ej. 50). No consume nada en idle, usa todo si el host está libre.
+*   **MemoryHigh**: Throttle suave (frena el consumo sin matar procesos).
+*   **Ver consumo real**: `nspawn-ctl resources` (abre `cgtop` filtrado).
 
-| Prefijo | Tipo |
-|---|---|
-| `venv` | Entornos desarrollo |
-| `k3s` | Clusters K3s |
-| `kvm` | KVM aislado |
-| `box` | Contenedores generales |
+### Operaciones de Btrfs
+*   **Snapshot**: `nspawn-ctl snapshot [nombre]`. Crea una copia instantánea en `/var/lib/machines`.
+*   **Modo Efímero**: `nspawn-ctl ephemeral [nombre]`. Inicia una copia temporal; al salir, todos los cambios se destruyen. Ideal para pruebas rápidas.
 
-## Requisitos
+---
 
-- archlinux base instalado (btrfs, subvolumen @machines)
-- Nada mas. systemd-nspawn ya viene con systemd.
+## 🌐 Networking y Seguridad
+
+*   **Zonas de Red**: Cada tipo de contenedor tiene su propia zona (ej. `Zone=venv`) para que no se vean entre sí a menos que se configure explícitamente.
+*   **Exponer Puertos**: 
+    1. Edita `/etc/systemd/nspawn/<nombre>.nspawn`.
+    2. Añade: `Port=tcp:8080:80` (Host 8080 -> Contenedor 80).
+    3. Reinicia: `nspawn-ctl stop <n>` y `nspawn-ctl start <n>`.
+*   **Aislamiento**: Se usa `PrivateUsers=pick` para que el `root` del contenedor no sea el `root` del sistema real.
+
+---
+
+## 📂 Estructura del Proyecto
+
+- `nspawn-ctl.sh`: CLI principal.
+- `lib/common.sh`: Funciones base y lógica de limpieza.
+- `lib/profiles.sh`: Perfiles de hardware y red por cada tipo.
+- `setup/`: Scripts de inicialización.
+- `cache/`: Descargas temporales persistentes.
