@@ -212,7 +212,7 @@ rm /mnt/chroot-install.sh
 # Finalizar
 # ══════════════════════════════════════════
 info "Copiando scripts y configuraciones adicionales..."
-cp -R libs /root/ 
+cp -R libs /mnt/root/
 ok "Instalacion completada"
 info "Desmontando..."
 umount -R /mnt
