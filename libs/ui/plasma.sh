@@ -370,6 +370,14 @@ KONSOLERC
 # ── Baloo usuario ─────────────────────────────────────────────────────────────
 balooctl6 disable 2>/dev/null || balooctl disable 2>/dev/null || true
 
+# baloorunner es activado por D-Bus (ej. al buscar en KRunner o el menú).
+# Para evitar que se ejecute en segundo plano, enmascaramos sus servicios:
+mkdir -p "$CONF_DIR/systemd/user"
+ln -sf /dev/null "$CONF_DIR/systemd/user/kde-baloo.service"
+ln -sf /dev/null "$CONF_DIR/systemd/user/plasma-baloorunner.service"
+systemctl --user mask kde-baloo.service 2>/dev/null || true
+systemctl --user mask plasma-baloorunner.service 2>/dev/null || true
+
 # ── Color scheme KDE — OLEDSafe ───────────────────────────────────────────────
 mkdir -p "$HOME/.local/share/color-schemes"
 cat > "$HOME/.local/share/color-schemes/OLEDSafe.colors" << 'COLORSCHEME'

@@ -34,12 +34,13 @@ $env.PATH = ($env.PATH | split row (char esep) | prepend '/usr/local/bin' | uniq
 
 # Prompt nativo de Nu — no lanza procesos externos
 def create_left_prompt [] {
-    let dir = ($env.PWD | str replace --string $env.HOME "~")
+    let dir = ($env.PWD | str replace $env.HOME "~")
 
-    # Git branch: sólo si hay repo, sin costo si no lo hay
+    # Git branch: captura silenciosa con complete, sin fallos si no hay repo
     let branch = (
-        do --ignore-errors { ^git branch --show-current }
-        | default ""
+        do -i { ^git branch --show-current } 
+        | complete 
+        | get stdout 
         | str trim
     )
 
@@ -102,7 +103,7 @@ $env.config = {
     }
 
     filesize: {
-        metric: true
+        unit: metric
     }
 
     # Cursor distingue modos vi visualmente — crítico en pantalla oscura
