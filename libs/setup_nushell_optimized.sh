@@ -65,12 +65,12 @@ $env.config = {
     show_banner: false
     render_right_prompt_on_last_line: false
     
-    # History configuration (SQLite + Deduplication)
+    # History: SQLite backend, write at session end (battery)
     history: {
-        file_format: "sqlite"     # Faster for large histories
-        max_size: 10000           # Keep it lean
-        sync_on_enter: false       # Sync across terminals
-        ignore_duplicates: true   # PREVENT DUPLICATES (Requested)
+        file_format: "sqlite"
+        max_size: 10000
+        sync_on_enter: false      # false = write on exit, not per-command
+        isolation: false
     }
 
     # Use compact tables to save screen space and rendering time
@@ -92,15 +92,14 @@ $env.config = {
         }
     }
 
-    # Filesystem and performance
+    # Filesize display
     filesize: {
-        metric: true
-        format: "auto"
+        unit: "metric"
     }
 
-    # Disable heavy features if not needed
-    edit_mode: nvim # neovim is very light
-    buffer_editor: "" # Prevents launching external editors unexpectedly
+    # vi keybindings (nvim-style navigation in shell)
+    edit_mode: "vi"
+    buffer_editor: "nvim"
 }
 
 # --- OLED OPTIMIZED COLOR THEME ---
@@ -169,12 +168,7 @@ $env.config.color_config = $oled_theme
 alias l = ls
 alias la = ls -a
 alias ll = ls -l
-alias g = git # If git is installed, simple alias is light
-
-echo "✅ Optimization complete!"
-echo "💡 Restart Nushell or run 'source $CONFIG_FILE' to apply."
+alias g = git
 EOF
 
-chmod +x "$0" 2>/dev/null || true
-
-echo "✨ Configuration files created for Nushell."
+echo "✓ Nushell config creada. Reinicia la shell para aplicar."

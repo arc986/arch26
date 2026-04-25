@@ -18,8 +18,9 @@ show_help() {
     nspawn-ctl create k3s <nombre>
     nspawn-ctl create kvm [cockpit|virt|cli]
     nspawn-ctl create box <nombre> [alpine|arch|debian]
+    nspawn-ctl create ia_rocm         ROCm + Ollama aislado (sin libs en el host)
 
-  Filtros: venv, k3s, k3s-lab, kvm, box
+  Filtros: venv, k3s, k3s-lab, kvm, box, ia
 
 MSG
 }
@@ -101,10 +102,11 @@ case "${1:-help}" in
 
   create)
     case "${2:-}" in
-      venv) bash "$SCRIPT_DIR/setup/venv.sh" "${3:-}" ;;
-      k3s)  bash "$SCRIPT_DIR/setup/k3s.sh"  "${3:-}" ;;
-      kvm)  bash "$SCRIPT_DIR/setup/kvm.sh"  "${3:-}" ;;
-      box)  bash "$SCRIPT_DIR/setup/box.sh"  "${3:-}" "${4:-}" ;;
+      venv)    bash "$SCRIPT_DIR/setup/venv.sh"     "${3:-}" ;;
+      k3s)     bash "$SCRIPT_DIR/setup/k3s.sh"      "${3:-}" ;;
+      kvm)     bash "$SCRIPT_DIR/setup/kvm.sh"      "${3:-}" ;;
+      box)     bash "$SCRIPT_DIR/setup/box.sh"      "${3:-}" "${4:-}" ;;
+      ia_rocm) bash "$SCRIPT_DIR/setup/ia_rocm.sh"  "${3:-}" ;;
       "")
         cat <<MSG
 
@@ -113,14 +115,16 @@ case "${1:-help}" in
     2) k3s         Cluster K3s
     3) kvm         KVM/QEMU aislado
     4) box         Generico (con/sin Podman)
+    5) ia_rocm     ROCm + Ollama aislado (RDNA 3.5 / NPU)
 
 MSG
-        read -rp "  Opcion [1/2/3/4]: " S
+        read -rp "  Opcion [1/2/3/4/5]: " S
         case "$S" in
           1) bash "$SCRIPT_DIR/setup/venv.sh" ;;
           2) bash "$SCRIPT_DIR/setup/k3s.sh" ;;
           3) bash "$SCRIPT_DIR/setup/kvm.sh" ;;
           4) bash "$SCRIPT_DIR/setup/box.sh" ;;
+          5) bash "$SCRIPT_DIR/setup/ia_rocm.sh" ;;
           *) echo "  Invalido" ;;
         esac ;;
       *) echo "  Tipo desconocido: ${2:-}"; show_help ;;

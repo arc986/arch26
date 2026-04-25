@@ -90,6 +90,38 @@ ${binds}"
   apply_device_allow "$name" "/dev/fuse rwm"
 }
 
+profile_ia_rocm() {
+  local name="$1"
+  # Bind condicional: solo agrega dispositivos que existen en el host al crear
+  local file_block="TemporaryFileSystem=/tmp:mode=1777"
+  [ -d /dev/dri ]   && file_block="${file_block}
+Bind=/dev/dri"
+  [ -e /dev/kfd ]   && file_block="${file_block}
+Bind=/dev/kfd"
+  [ -d /dev/accel ] && file_block="${file_block}
+Bind=/dev/accel"
+
+  write_nspawn_config "$name" "[Exec]
+Boot=no
+PrivateUsers=no
+Capability=CAP_SYS_ADMIN CAP_CHOWN CAP_DAC_OVERRIDE CAP_SETUID CAP_SETGID CAP_FOWNER
+
+[Network]
+VirtualEthernet=no
+
+[Files]
+$file_block"
+
+  apply_resources "$name" 75 3G 6G 256
+
+  # DeviceAllow: paths concretos de los dispositivos detectados
+  local devs=()
+  [ -d /dev/dri ]           && devs+=("char-drm rw")
+  [ -e /dev/kfd ]           && devs+=("/dev/kfd rw")
+  [ -e /dev/accel/accel0 ]  && devs+=("/dev/accel/accel0 rw")
+  [ ${#devs[@]} -gt 0 ]     && apply_device_allow "$name" "${devs[@]}"
+}
+
 profile_container() {
   local name="$1" net="$2" port="$3"
   local net_block="VirtualEthernet=yes
