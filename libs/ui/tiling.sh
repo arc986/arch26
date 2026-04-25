@@ -22,7 +22,7 @@ HOME_DIR="/home/$USERNAME"
 
 # --- Paquetes comunes ---
 COMMON_PKGS=(
-  # Wayland core
+  # Wayland core — sin X11, todo nativo Wayland
   xdg-desktop-portal-gtk
   xdg-desktop-portal-wlr
   xorg-xwayland
@@ -49,11 +49,10 @@ COMMON_PKGS=(
   gvfs-mtp
   tumbler
 
-  # Apps graficas ligeras
+  # Apps graficas ligeras (neovim ya viene en install.sh — sin editor GUI)
   imv
   zathura
   zathura-pdf-mupdf
-  gnome-text-editor
 
   # Screenshots + clipboard
   grim
@@ -93,7 +92,7 @@ else
 fi
 
 # --- Instalar ---
-sudo pacman -S --needed "${COMMON_PKGS[@]}" "${WM_PKGS[@]}"
+sudo pacman -S --needed --noconfirm "${COMMON_PKGS[@]}" "${WM_PKGS[@]}"
 
 # --- Crear directorios de usuario ---
 sudo -u "$USERNAME" xdg-user-dirs-update
@@ -178,7 +177,7 @@ tooltip {
 EOF
 
 # --- dconf: GTK4/libadwaita dark (apps GNOME modernas) ---
-sudo pacman -S --needed dconf
+sudo pacman -S --needed --noconfirm dconf
 sudo -u "$USERNAME" dbus-launch dconf write /org/gnome/desktop/interface/color-scheme "'prefer-dark'"
 sudo -u "$USERNAME" dbus-launch dconf write /org/gnome/desktop/interface/gtk-theme "'Adwaita-dark'"
 sudo -u "$USERNAME" dbus-launch dconf write /org/gnome/desktop/interface/icon-theme "'Papirus-Dark'"
@@ -188,9 +187,11 @@ sudo -u "$USERNAME" dbus-launch dconf write /org/gnome/desktop/interface/monospa
 # --- Qt5/Qt6 dark (apps KDE) via Kvantum ---
 sudo -u "$USERNAME" mkdir -p "$CFG/qt5ct" "$CFG/qt6ct" "$CFG/Kvantum"
 
+# Default es el tema oscuro incluido con el paquete kvantum (repos oficiales)
+# KvArcDark era AUR-only y causaba que Qt quedara sin tema
 cat > "$CFG/Kvantum/kvantum.kvconfig" <<'EOF'
 [General]
-theme=KvArcDark
+theme=Default
 EOF
 
 cat > "$CFG/qt5ct/qt5ct.conf" <<'EOF'
@@ -226,17 +227,20 @@ PATH=$HOME/.local/bin:$PATH
 EOF
 
 # --- Foot terminal (OLED black) ---
+# [tweak] eliminado: grapheme-shaping, overflowing-glyphs y grapheme-width-method
+# son funciones experimentales que causan rayas horizontales (artifacts) al
+# renderizar, especialmente al hacer scroll. blink=no: cursor solido OLED safe.
 cat > "$CFG/foot/foot.ini" <<'EOF'
 [main]
 font=JetBrains Mono:size=11
 font-bold=JetBrains Mono:weight=bold:size=11
 font-italic=JetBrains Mono:slant=italic:size=11
 font-bold-italic=JetBrains Mono:weight=bold:slant=italic:size=11
-line-height=1.2
+line-height=1.4
 pad=10x10
 dpi-aware=yes
 bold-text-in-bright=no
-word-delimiters=,│`|:"'()[]{}<>
+word-delimiters=,|:"'()[]{}<>
 
 [scrollback]
 lines=10000
@@ -244,7 +248,7 @@ multiplier=3.0
 
 [cursor]
 style=beam
-blink=yes
+blink=no
 beam-thickness=1.5
 color=000000 999999
 
@@ -258,12 +262,6 @@ font-increase=Control+plus
 font-decrease=Control+minus
 font-reset=Control+0
 search-start=Control+Shift+f
-
-[tweak]
-font-monospace-warn=no
-grapheme-shaping=yes
-grapheme-width-method=wcswidth
-overflowing-glyphs=yes
 
 [colors]
 alpha=1.0
@@ -659,6 +657,8 @@ exec battery-monitor
 exec usb-monitor
 exec waybar-oled-adapt
 exec kanshi
+# Perfil de energia: powersave siempre (equivalente a PowerDevil en plasma.sh)
+exec powerprofilesctl set power-saver
 SWAYCONF
 fi
 
@@ -717,6 +717,8 @@ spawn-at-startup "battery-monitor"
 spawn-at-startup "usb-monitor"
 spawn-at-startup "waybar-oled-adapt"
 spawn-at-startup "kanshi"
+// Perfil de energia: powersave siempre (equivalente a PowerDevil en plasma.sh)
+spawn-at-startup "sh" "-c" "powerprofilesctl set power-saver"
 
 binds {
     Mod+Return { spawn "foot"; }
@@ -870,13 +872,14 @@ USBMON
 
 chmod +x "$HOME_DIR/.local/bin"/{battery-monitor,usb-monitor}
 
-# --- Swayidle wrapper (para Niri spawn compatibility) ---
-cat > "$HOME_DIR/.local/bin/idle-manager" <<'IDLE'
+# OLED: pantalla se apaga 30s despues del lock (no 5min mas)
+# before-sleep: bloquear antes de suspender (lid close)
+cat > "$HOME_DIR/.local/bin/idle-manager" << 'IDLE'
 #!/bin/bash
 exec swayidle -w \
-    timeout 300 'swaylock -f' \
-    timeout 600 'swaymsg "output * power off" 2>/dev/null || niri msg action power-off-monitors 2>/dev/null' \
-    resume 'swaymsg "output * power on" 2>/dev/null || niri msg action power-on-monitors 2>/dev/null' \
+    timeout 300  'swaylock -f' \
+    timeout 330  'swaymsg "output * dpms off" 2>/dev/null || niri msg action power-off-monitors 2>/dev/null' \
+    resume       'swaymsg "output * dpms on"  2>/dev/null || niri msg action power-on-monitors  2>/dev/null' \
     before-sleep 'swaylock -f'
 IDLE
 chmod +x "$HOME_DIR/.local/bin/idle-manager"
@@ -891,7 +894,7 @@ case "$1" in
 esac
 # Clamp entre 0.5 y 3.0
 if (( $(echo "$NEW >= 0.5" | bc -l) )) && (( $(echo "$NEW <= 3.0" | bc -l) )); then
-  swaymsg output - scale "$NEW"
+  swaymsg output '*' scale "$NEW"   # '*' aplica a todos los outputs activos
 fi
 PINCH
 chmod +x "$HOME_DIR/.local/bin/pinch-zoom"
@@ -985,18 +988,22 @@ trap 'update_waybar' USR1
 # Aplicar al inicio
 update_waybar
 
-# Monitorear cambios de brillo via udev (sin polling)
-stdbuf -oL udevadm monitor --subsystem-match=backlight --property 2>/dev/null | while read -r line; do
-  case "$line" in
-    *"change"*) update_waybar ;;
-  esac
-done &
-
-# Fallback: revisar cada 30s por si udev no dispara (ej: cambio via software)
-while true; do
-  sleep 30
-  update_waybar
-done
+# Event-driven via udev; polling solo si udev no disponible
+# Fix: antes ambos corrian simultaneamente (udev en & + polling en foreground)
+if command -v udevadm &>/dev/null; then
+  stdbuf -oL udevadm monitor \
+    --subsystem-match=backlight --property 2>/dev/null | while read -r line; do
+    case "$line" in
+      *"change"*) update_waybar ;;
+    esac
+  done
+else
+  # Fallback: polling cada 30s solo si udev no esta disponible
+  while true; do
+    sleep 30
+    update_waybar
+  done
+fi
 ADAPT
 
 chmod +x "$HOME_DIR/.local/bin/waybar-oled-adapt"
@@ -1057,42 +1064,46 @@ echo "$BINDS" | fuzzel -d -p "  " --width=55 --lines=28 > /dev/null 2>&1
 KEYS
 chmod +x "$HOME_DIR/.local/bin/keybinds"
 
-# --- Pipewire: defaults optimizados para desktop ---
-# No se modifica quantum (default 1024 = buen balance latencia/bateria)
-# Solo se fija rate a 48000 para evitar resampling innecesario
+# --- Pipewire: coherente con plasma.sh ---
 sudo -u "$USERNAME" mkdir -p "$CFG/pipewire/pipewire.conf.d"
-cat > "$CFG/pipewire/pipewire.conf.d/99-desktop.conf" <<'EOF'
+cat > "$CFG/pipewire/pipewire.conf.d/99-desktop.conf" << 'EOF'
 context.properties = {
-    default.clock.rate = 48000
+    default.clock.rate          = 48000
+    default.clock.allowed-rates = [ 44100 48000 96000 ]
+    default.clock.quantum       = 1024
+    default.clock.min-quantum   = 32
+    default.clock.max-quantum   = 8192
+    log.level                   = 2
 }
 EOF
 
 # --- Permisos finales ---
-chown -R "$USERNAME:users" "$CFG" "$HOME_DIR/.local"
+chown -R "$USERNAME:" "$CFG" "$HOME_DIR/.local"   # grupo primario del usuario
 
-# --- Login manager: lemurs (minimal TUI, OLED safe) ---
-sudo pacman -S --needed lemurs
+# --- Login manager: lemurs (TUI puro, oficial extra repo, OLED safe) ---
+# lemurs si esta en los repos oficiales de Arch (extra).
+# Los scripts de sesion van en /etc/lemurs/wayland/ (no wayland-sessions).
+sudo pacman -S --needed --noconfirm lemurs
 
-# Configurar lemurs con colores OLED
+# Config OLED: fondo negro, sin animaciones
 sudo mkdir -p /etc/lemurs
-if [ -f /etc/lemurs/config.toml ]; then
-  sudo sed -i 's/border_color = .*/border_color = "dark gray"/' /etc/lemurs/config.toml
-  sudo sed -i 's/input_color = .*/input_color = "dark gray"/' /etc/lemurs/config.toml
-else
-  sudo tee /etc/lemurs/config.toml > /dev/null <<'LEMURS'
-[style]
-border_color = "dark gray"
-input_color = "dark gray"
-LEMURS
-fi
+sudo tee /etc/lemurs/config.toml > /dev/null << 'LEMURSCFG'
+[ui]
+show_box         = true
+remember_username = true
 
-# Crear entrada de sesion para el compositor
+[ui.colors]
+input_color = "DarkGray"
+error_color = "Red"
+LEMURSCFG
+
+# Script de sesion Wayland para el compositor elegido
 sudo mkdir -p /etc/lemurs/wayland
-cat <<WMSESSION | sudo tee /etc/lemurs/wayland/$WM > /dev/null
+cat << WMSESSION | sudo tee "/etc/lemurs/wayland/$WM" > /dev/null
 #!/bin/sh
 exec $WM
 WMSESSION
-sudo chmod +x /etc/lemurs/wayland/$WM
+sudo chmod +x "/etc/lemurs/wayland/$WM"
 
 sudo systemctl enable lemurs.service
 
