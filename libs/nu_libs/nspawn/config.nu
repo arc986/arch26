@@ -5,13 +5,13 @@ export const NSPAWN_CFG  = "/etc/systemd/nspawn"
 export const SYSTEMD_SVC = "/etc/systemd/system"
 export const ALPINE_VER  = "3.21"
 
-export def cache_dir [] -> string {
+export def cache_dir [] {
     $"($env.HOME)/.nspawn/cache"
 }
 
 # Usuario con UID 1000 (para bind mounts de ~/Projects)
-export def host_user [] -> record<name: string, home: string> {
-    open /etc/passwd
+export def host_user [] {
+    open --raw /etc/passwd
     | lines
     | parse "{name}:{_p}:{uid}:{_g}:{_i}:{home}:{_s}"
     | where uid == "1000"

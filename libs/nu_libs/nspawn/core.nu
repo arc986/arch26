@@ -40,28 +40,28 @@ export def copy_into [name: string, src: string, dest: string] {
 }
 
 # Lee el contenido de un archivo del rootfs del contenedor (funciona aunque esté en ejecución)
-export def read_from [name: string, rel_path: string] -> string {
-    open $"($MACHINES)/($name)/($rel_path)" | str trim
+export def read_from [name: string, rel_path: string] {
+    open --raw $"($MACHINES)/($name)/($rel_path)" | str trim
 }
 
 # ── Descargas con caché ────────────────────────────────────────────────────────
 
-export def download_cached [url: string, filename: string] -> string {
-    let dir = cache_dir
-    if not ($dir | path exists) { mkdir $dir }
+export def download_cached [url: string, filename: string] {
+    let dir = (cache_dir)
+    if not ($dir | path exists) { mkdir $dir };
     let dest = $"($dir)/($filename)"
     if not ($dest | path exists) {
         print $"  Descargando ($filename)..."
         ^curl -fL --progress-bar -o $dest $url
-    }
+    };
     $dest
 }
 
 # ── Generación de configuración .nspawn ────────────────────────────────────────
 
 # Convierte un perfil (record) al formato INI de systemd-nspawn
-export def gen_nspawn_config [name: string, p: record] -> string {
-    let u = host_user
+export def gen_nspawn_config [name: string, p: record] {
+    let u = (host_user)
     mut lines: list<string> = []
 
     $lines = $lines | append "[Exec]"
@@ -198,11 +198,11 @@ export def "nspawn list" [filter?: string] {
     | each { |f| $f | path basename }
     | where { |name| if ($filter | is-empty) { true } else { $name | str starts-with $filter } }
     | each { |name|
-        let state = if ($running | any { $in == $name }) { "running" } else { "stopped" }
+        let state = if ($running | any { |it| $it == $name }) { "running" } else { "stopped" }
         let ram = if $state == "running" {
             let cg = $"/sys/fs/cgroup/machine.slice/systemd-nspawn@($name).service/memory.current"
             if ($cg | path exists) {
-                let bytes = open $cg | str trim | into int
+                let bytes = open --raw $cg | str trim | into int
                 let mb = $bytes / 1048576 | math round
                 $"($mb)M"
             } else { "-" }

@@ -1,5 +1,5 @@
-use ./venv.nu *
-use ./k3s.nu *
-use ./kvm.nu *
-use ./box.nu *
-use ./ai.nu *
+export use ./venv.nu *
+export use ./k3s.nu *
+export use ./kvm.nu *
+export use ./box.nu *
+export use ./ai.nu *

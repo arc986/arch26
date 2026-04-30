@@ -21,7 +21,7 @@ def k3s_template [] {
 }
 
 # IP del contenedor según machinectl status
-def machine_ip [name: string] -> string {
+def machine_ip [name: string] {
     ^sudo machinectl status $name
     | lines
     | where { $in | str contains "Address:" }

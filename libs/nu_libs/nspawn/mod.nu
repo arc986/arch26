@@ -9,9 +9,9 @@
 #
 # Permisos necesarios: nspawn setup-permisos --write
 
-use ./config.nu *
-use ./core.nu *
-use ./setup/mod.nu *
+export use ./config.nu *
+export use ./core.nu *
+export use ./setup/mod.nu *
 
 # Muestra (y opcionalmente instala) las reglas sudo necesarias para operar sin contraseña
 export def "nspawn setup-permisos" [

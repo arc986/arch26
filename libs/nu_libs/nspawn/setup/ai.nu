@@ -28,7 +28,7 @@ export def "nspawn create ai" [] {
     ensure_not_exists $AI_NAME
 
     # Detectar solo el hardware presente — no enlazar lo que no existe
-    let devices       = ["/dev/dri", "/dev/kfd", "/dev/accel"] | where { $in | path exists }
+    let devices       = ["/dev/dri", "/dev/kfd", "/dev/accel"] | where { |it| $it | path exists }
     let device_allows = build_device_allows $devices
     if ($devices | is-empty) {
         error make {msg: "No se detectaron /dev/dri, /dev/kfd ni /dev/accel. ¿Están cargados los drivers AMD?"}
@@ -82,11 +82,11 @@ export def "nspawn create ai" [] {
     print "  API: http://localhost:11434  (reenviado desde zone:ai)"
 }
 
-def build_device_allows [devices: list<string>] -> list<string> {
+def build_device_allows [devices: list<string>] {
     mut allows: list<string> = []
-    if ($devices | any { $in == "/dev/dri"   }) { $allows = $allows | append "char-drm rwm" }
-    if ($devices | any { $in == "/dev/kfd"   }) { $allows = $allows | append "/dev/kfd rwm" }
-    if ($devices | any { $in == "/dev/accel" }) { $allows = $allows | append "/dev/accel rwm" }
+    if ($devices | any { |it| $it == "/dev/dri"   }) { $allows = ($allows | append "char-drm rwm") };
+    if ($devices | any { |it| $it == "/dev/kfd"   }) { $allows = ($allows | append "/dev/kfd rwm") };
+    if ($devices | any { |it| $it == "/dev/accel" }) { $allows = ($allows | append "/dev/accel rwm") };
     $allows
 }
 
@@ -96,7 +96,7 @@ def build_device_allows [devices: list<string>] -> list<string> {
 def setup_host_udev [devices: list<string>] {
     print "Configurando udev de energía en el host..."
 
-    if ($devices | any { $in == "/dev/dri" }) {
+    if ($devices | any { |it| $it == "/dev/dri" }) {
         # DPM auto: la GPU escala su consumo según carga (crítico para batería)
         "ACTION==\"add\", SUBSYSTEM==\"pci\", ATTRS{vendor}==\"0x1002\", ATTR{power/control}=\"auto\"\n"
         | ^sudo tee /etc/udev/rules.d/71-amdgpu-pm.rules | ignore
@@ -105,7 +105,7 @@ def setup_host_udev [devices: list<string>] {
         | ^sudo tee /etc/tmpfiles.d/amdgpu-pm.conf | ignore
     }
 
-    if ($devices | any { $in == "/dev/accel" }) {
+    if ($devices | any { |it| $it == "/dev/accel" }) {
         # XDNA2 NPU power gating: el NPU se apaga cuando no hay tareas de IA
         "ACTION==\"add\", SUBSYSTEM==\"misc\", KERNEL==\"accel*\", ATTR{power/control}=\"auto\"\n"
         | ^sudo tee /etc/udev/rules.d/70-amdxdna.rules | ignore
