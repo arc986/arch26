@@ -5,7 +5,7 @@ use ../config.nu *
 use ../core.nu [
     ensure_not_exists, run_in, read_from, download_cached,
     create_alpine_base, clone_template,
-    write_nspawn_config, apply_resources
+    write_nspawn_config, apply_resources, sudo_exists
 ]
 
 const K3S_TMPL  = ".k3s-template"
@@ -13,7 +13,7 @@ const K3S_FLAGS = "--disable traefik,servicelb,local-storage,metrics-server --fl
 
 # Template Alpine con dependencias de red para k3s
 def k3s_template [] {
-    if ($"($MACHINES)/($K3S_TMPL)" | path exists) { return }
+    if (sudo_exists $"($MACHINES)/($K3S_TMPL)") { return }
     print "Creando template Alpine para k3s..."
     create_alpine_base $K3S_TMPL
     run_in $K3S_TMPL "apk add --no-cache curl iptables ip6tables wireguard-tools ca-certificates"
@@ -37,7 +37,7 @@ def wait_for_k3s [master: string] {
     let token_path = $"($MACHINES)/($master)/var/lib/rancher/k3s/server/node-token"
     mut attempts = 0
     print -n "  Esperando k3s master"
-    while (not ($token_path | path exists)) and $attempts < 40 {
+    while (not (sudo_exists $token_path)) and $attempts < 40 {
         print -n "."
         sleep 3sec
         $attempts = $attempts + 1

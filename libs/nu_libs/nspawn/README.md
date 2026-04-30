@@ -35,16 +35,7 @@ Para cargar la librería en tu sesión actual de Nushell:
 use libs/nu_libs/nspawn/mod.nu *
 ```
 
-### 1. Configurar Permisos (Solo una vez)
-
-La librería requiere privilegios de superusuario para operar contenedores e instantáneas. Para poder usar los comandos sin contraseña, instala las reglas sudo:
-
-```nushell
-nspawn setup-permisos --write
-```
-*(Esto instalará las políticas en `/etc/sudoers.d/nspawn`)*
-
-### 2. Comandos Principales
+### 1. Comandos Principales
 
 ```nushell
 nspawn list             # Muestra todos los contenedores y su consumo de RAM

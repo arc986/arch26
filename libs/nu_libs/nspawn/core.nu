@@ -4,14 +4,19 @@ use ./config.nu *
 
 # ── Guardas ────────────────────────────────────────────────────────────────────
 
+export def sudo_exists [path: string] {
+    let res = do -i { ^sudo test -e $path } | complete
+    $res.exit_code == 0
+}
+
 export def ensure_exists [name: string] {
-    if not ($"($MACHINES)/($name)" | path exists) {
+    if not (sudo_exists $"($MACHINES)/($name)") {
         error make {msg: $"Contenedor no encontrado: ($name)"}
     }
 }
 
 export def ensure_not_exists [name: string] {
-    if ($"($MACHINES)/($name)" | path exists) {
+    if (sudo_exists $"($MACHINES)/($name)") {
         error make {msg: $"Ya existe un contenedor con ese nombre: ($name)"}
     }
 }
@@ -41,7 +46,7 @@ export def copy_into [name: string, src: string, dest: string] {
 
 # Lee el contenido de un archivo del rootfs del contenedor (funciona aunque esté en ejecución)
 export def read_from [name: string, rel_path: string] {
-    open --raw $"($MACHINES)/($name)/($rel_path)" | str trim
+    ^sudo cat $"($MACHINES)/($name)/($rel_path)" | str trim
 }
 
 # ── Descargas con caché ────────────────────────────────────────────────────────
@@ -192,17 +197,16 @@ export def "nspawn list" [filter?: string] {
         | each { |l| $l | str trim | split row " " | first }
     } catch { [] }
 
-    ls $MACHINES
-    | where type == "dir"
-    | get name
-    | each { |f| $f | path basename }
+    let dirs = try { ^sudo ls -1 $MACHINES | lines } catch { [] }
+    
+    $dirs
     | where { |name| if ($filter | is-empty) { true } else { $name | str starts-with $filter } }
     | each { |name|
         let state = if ($running | any { |it| $it == $name }) { "running" } else { "stopped" }
         let ram = if $state == "running" {
             let cg = $"/sys/fs/cgroup/machine.slice/systemd-nspawn@($name).service/memory.current"
-            if ($cg | path exists) {
-                let bytes = open --raw $cg | str trim | into int
+            if (sudo_exists $cg) {
+                let bytes = ^sudo cat $cg | str trim | into int
                 let mb = $bytes / 1048576 | math round
                 $"($mb)M"
             } else { "-" }

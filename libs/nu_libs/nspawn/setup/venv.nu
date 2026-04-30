@@ -5,14 +5,14 @@ use ../config.nu *
 use ../core.nu [
     ensure_not_exists, run_in, download_cached, copy_into,
     create_alpine_base, clone_template,
-    write_nspawn_config, apply_resources
+    write_nspawn_config, apply_resources, sudo_exists
 ]
 
 const VENV_TMPL = ".venv-template"
 
 # Crea el template Alpine base con herramientas de compilación (solo una vez)
 def venv_template [] {
-    if ($"($MACHINES)/($VENV_TMPL)" | path exists) { return }
+    if (sudo_exists $"($MACHINES)/($VENV_TMPL)") { return }
     print "Creando template Alpine para venv..."
     create_alpine_base $VENV_TMPL
     run_in $VENV_TMPL "apk add --no-cache curl build-base ca-certificates git"
