@@ -93,5 +93,5 @@ export def "nspawn create k3s" [
 
     print $"\nCluster '($cluster)' listo  →  ($workers) workers"
     print $"  kubectl: sudo machinectl shell ($master) -- k3s kubectl get nodes"
-    print $"  Parar todo: nspawn list k3s-($cluster) | each { |c| nspawn stop ($c.name) }"
+    print ("  Parar todo: nspawn list k3s-" + $cluster + " | each { |c| nspawn stop ($c.name) }")
 }
