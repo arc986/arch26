@@ -13,7 +13,7 @@ use ../core.nu [
 
 const AI_NAME = "ia-rocm"
 
-def alpine_repos [] -> string {
+def alpine_repos [] {
     [
         $"https://dl-cdn.alpinelinux.org/alpine/v($ALPINE_VER)/main"
         $"https://dl-cdn.alpinelinux.org/alpine/v($ALPINE_VER)/community"

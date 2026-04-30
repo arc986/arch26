@@ -13,6 +13,11 @@ export use ./config.nu *
 export use ./core.nu *
 export use ./setup/mod.nu *
 
+# Gestión ultraligera de contenedores systemd-nspawn
+export def nspawn [] {
+    help nspawn
+}
+
 # Muestra (y opcionalmente instala) las reglas sudo necesarias para operar sin contraseña
 export def "nspawn setup-permisos" [
     --write (-w)  # escribe /etc/sudoers.d/nspawn  (requiere sudo activo)
