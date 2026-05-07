@@ -34,7 +34,11 @@ DATA_DIR="$HOME_DIR/.config/Kiro"
 METADATA_URL="https://prod.download.desktop.kiro.dev/stable/metadata-linux-x64-stable.json"
 VERSION_FILE="$INSTALL_DIR/.kiro-version"
 
-# ── Dependencias (Electron/VS Code fork) ──
+# Variables globales para fetch_metadata
+REMOTE_VERSION=""
+DOWNLOAD_URL=""
+
+# ── Dependencias (Electron/VS Code fork + herramientas del script) ──
 # Todas disponibles en repos oficiales de Arch (extra)
 DEPS=(
   gtk3          # UI toolkit
@@ -45,6 +49,7 @@ DEPS=(
   xdg-utils     # xdg-open para links
   libnotify     # Notificaciones
   mesa          # GPU rendering
+  jq            # Parseo de metadata JSON (usado por este script)
 )
 
 # ══════════════════════════════════════════
@@ -78,7 +83,8 @@ check_deps() {
   if [ ${#missing[@]} -gt 0 ]; then
     echo ""
     warn "Dependencias faltantes: ${missing[*]}"
-    read -rp "  Instalar ahora? [s/N]: " INSTALL_DEPS
+    local INSTALL_DEPS=""
+    read -rp "  Instalar ahora? [s/N]: " INSTALL_DEPS || true
     if [[ "$INSTALL_DEPS" == "s" ]]; then
       sudo pacman -S --needed --noconfirm "${missing[@]}"
       ok "Dependencias instaladas"
@@ -111,20 +117,28 @@ get_installed_version() {
 fetch_metadata() {
   # Descarga metadata JSON y extrae URL del tarball y version remota
   local meta
-  meta=$(curl --proto '=https' --tlsv1.2 -sf --connect-timeout 10 "$METADATA_URL" 2>/dev/null) || {
-    warn "No se pudo obtener metadata de Kiro"
-    return 1
+  info "Consultando metadata de Kiro..."
+  meta=$(curl --proto '=https' --tlsv1.2 -sS --connect-timeout 10 "$METADATA_URL") || {
+    die "No se pudo obtener metadata de Kiro (sin conexion o URL inaccesible)"
   }
+
+  if [ -z "$meta" ]; then
+    die "Metadata vacia — verifica tu conexion a internet"
+  fi
 
   if command -v jq &>/dev/null; then
     REMOTE_VERSION=$(echo "$meta" | jq -r '.currentRelease // empty')
-    DOWNLOAD_URL=$(echo "$meta" | jq -r '.releases[].updateTo.url | select(endswith(".tar.gz"))' | head -1)
+    DOWNLOAD_URL=$(echo "$meta" | jq -r '[.releases[].updateTo.url | select(endswith(".tar.gz"))][0] // empty')
   elif command -v python3 &>/dev/null; then
-    REMOTE_VERSION=$(echo "$meta" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('currentRelease',''))")
+    REMOTE_VERSION=$(echo "$meta" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print(d.get('currentRelease',''))
+")
     DOWNLOAD_URL=$(echo "$meta" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-for r in d.get('releases',{}).values() if isinstance(d.get('releases'),dict) else d.get('releases',[]):
+for r in d.get('releases',[]):
     url=r.get('updateTo',{}).get('url','')
     if url.endswith('.tar.gz'):
         print(url); break
@@ -133,7 +147,11 @@ for r in d.get('releases',{}).values() if isinstance(d.get('releases'),dict) els
     die "Se requiere jq o python3 para parsear metadata"
   fi
 
-  [ -z "$DOWNLOAD_URL" ] && die "No se encontro URL del tarball en metadata"
+  if [ -z "$DOWNLOAD_URL" ]; then
+    die "No se encontro URL del tarball en metadata (estructura inesperada)"
+  fi
+
+  ok "URL de descarga obtenida"
 }
 
 save_version_info() {
