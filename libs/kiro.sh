@@ -116,25 +116,26 @@ get_installed_version() {
 
 fetch_metadata() {
   # Descarga metadata JSON y extrae URL del tarball y version remota
-  local meta
+  local meta=""
   info "Consultando metadata de Kiro..."
-  meta=$(curl --proto '=https' --tlsv1.2 -sS --connect-timeout 10 "$METADATA_URL") || {
-    die "No se pudo obtener metadata de Kiro (sin conexion o URL inaccesible)"
-  }
+
+  if ! meta=$(curl --proto '=https' --tlsv1.2 -sS --connect-timeout 10 "$METADATA_URL" 2>&1); then
+    die "No se pudo obtener metadata de Kiro: $meta"
+  fi
 
   if [ -z "$meta" ]; then
     die "Metadata vacia — verifica tu conexion a internet"
   fi
 
   if command -v jq &>/dev/null; then
-    REMOTE_VERSION=$(echo "$meta" | jq -r '.currentRelease // empty')
-    DOWNLOAD_URL=$(echo "$meta" | jq -r '[.releases[].updateTo.url | select(endswith(".tar.gz"))][0] // empty')
+    REMOTE_VERSION=$(echo "$meta" | jq -r '.currentRelease // empty') || true
+    DOWNLOAD_URL=$(echo "$meta" | jq -r '[.releases[].updateTo.url | select(endswith(".tar.gz"))][0] // empty') || true
   elif command -v python3 &>/dev/null; then
     REMOTE_VERSION=$(echo "$meta" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 print(d.get('currentRelease',''))
-")
+") || true
     DOWNLOAD_URL=$(echo "$meta" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -142,7 +143,7 @@ for r in d.get('releases',[]):
     url=r.get('updateTo',{}).get('url','')
     if url.endswith('.tar.gz'):
         print(url); break
-")
+") || true
   else
     die "Se requiere jq o python3 para parsear metadata"
   fi
@@ -169,11 +170,12 @@ save_version_info() {
 do_install() {
   check_deps
 
-  local current_ver
-  current_ver=$(get_installed_version)
+  local current_ver=""
+  current_ver=$(get_installed_version) || true
   if [ -n "$current_ver" ]; then
     warn "Kiro ya instalado (version: $current_ver)"
-    read -rp "  Reinstalar/actualizar? [s/N]: " CONFIRM
+    local CONFIRM=""
+    read -rp "  Reinstalar/actualizar? [s/N]: " CONFIRM || true
     [[ "$CONFIRM" == "s" ]] || return 0
   fi
 
@@ -254,12 +256,12 @@ FLAGS
 do_update() {
   [ ! -d "$INSTALL_DIR" ] && die "Kiro no esta instalado"
 
-  local current_ver
-  current_ver=$(get_installed_version)
+  local current_ver=""
+  current_ver=$(get_installed_version) || true
   info "Version instalada: ${current_ver:-desconocida}"
 
   info "Verificando actualizaciones..."
-  fetch_metadata || { warn "No se pudo verificar — intenta mas tarde"; return 1; }
+  fetch_metadata
 
   if [ -n "$current_ver" ] && [ "$current_ver" = "$REMOTE_VERSION" ]; then
     ok "Ya tienes la ultima version ($current_ver)"
@@ -272,7 +274,8 @@ do_update() {
     warn "No se pudo determinar version remota — reinstalando por seguridad"
   fi
 
-  read -rp "  Actualizar ahora? [s/N]: " CONFIRM
+  local CONFIRM=""
+  read -rp "  Actualizar ahora? [s/N]: " CONFIRM || true
   [[ "$CONFIRM" == "s" ]] || return 0
 
   do_install
@@ -293,8 +296,9 @@ do_remove() {
   echo "  Datos de usuario (config, extensiones):"
   echo "    $DATA_DIR"
   echo ""
-  read -rp "  Eliminar tambien datos de usuario? [s/N]: " CLEAN_DATA
-  read -rp "  Confirmar eliminacion? [s/N]: " CONFIRM
+  local CLEAN_DATA="" CONFIRM=""
+  read -rp "  Eliminar tambien datos de usuario? [s/N]: " CLEAN_DATA || true
+  read -rp "  Confirmar eliminacion? [s/N]: " CONFIRM || true
   [[ "$CONFIRM" == "s" ]] || return 0
 
   info "Eliminando Kiro..."
@@ -379,8 +383,8 @@ case "${1:-}" in
     echo "  4) Verificar dependencias"
     echo "  5) Salir"
     echo ""
-    read -rp "  Opcion [1-5]: " CHOICE
-    case "$CHOICE" in
+    read -rp "  Opcion [1-5]: " CHOICE || true
+    case "${CHOICE:-}" in
       1) do_install ;;
       2) do_update ;;
       3) do_remove ;;
