@@ -13,23 +13,25 @@
 #   bash kiro.sh remove       Eliminar completamente
 #   bash kiro.sh status       Ver version y estado
 #   bash kiro.sh deps         Verificar dependencias
-set -e
+set -euo pipefail
 
 R='\033[1;31m' G='\033[1;32m' Y='\033[1;33m' C='\033[1;36m' N='\033[0m'
 info()  { printf "${C}:: %s${N}\n" "$*"; }
 ok()    { printf "${G}✓  %s${N}\n" "$*"; }
 warn()  { printf "${Y}⚠  %s${N}\n" "$*"; }
-die()   { printf "${R}✗  %s${N}\n" "$*"; exit 1; }
+die()   { printf "${R}✗  %s${N}\n" "$*" >&2; exit 1; }
 
+# ── Detectar usuario ──
 USERNAME=$(getent passwd 1000 | cut -d: -f1)
 [ -z "$USERNAME" ] && die "No se encontro usuario UID 1000"
-HOME_DIR="/home/$USERNAME"
+USER_GROUP=$(id -gn "$USERNAME")
+HOME_DIR=$(getent passwd 1000 | cut -d: -f6)
 
 INSTALL_DIR="$HOME_DIR/.local/share/kiro"
 BIN_DIR="$HOME_DIR/.local/bin"
 DESKTOP_DIR="$HOME_DIR/.local/share/applications"
 DATA_DIR="$HOME_DIR/.config/Kiro"
-DOWNLOAD_URL="https://prod.download.desktop.kiro.dev/releases/stable/linux-x64/kiro-ide-stable-linux-x64.tar.gz"
+METADATA_URL="https://prod.download.desktop.kiro.dev/stable/metadata-linux-x64-stable.json"
 VERSION_FILE="$INSTALL_DIR/.kiro-version"
 
 # ── Dependencias (Electron/VS Code fork) ──
@@ -46,7 +48,19 @@ DEPS=(
 )
 
 # ══════════════════════════════════════════
-# Funciones
+# Funciones auxiliares
+# ══════════════════════════════════════════
+
+as_user() {
+  sudo -u "$USERNAME" -- "$@"
+}
+
+set_owner() {
+  chown -R "$USERNAME:$USER_GROUP" "$@"
+}
+
+# ══════════════════════════════════════════
+# Funciones principales
 # ══════════════════════════════════════════
 
 check_deps() {
@@ -80,17 +94,58 @@ get_installed_version() {
   if [ -f "$VERSION_FILE" ]; then
     cat "$VERSION_FILE"
   elif [ -f "$INSTALL_DIR/resources/app/package.json" ]; then
-    python3 -c "import json;print(json.load(open('$INSTALL_DIR/resources/app/package.json'))['version'])" 2>/dev/null || echo "desconocida"
+    # Preferir jq, fallback a python3
+    if command -v jq &>/dev/null; then
+      jq -r '.version' "$INSTALL_DIR/resources/app/package.json" 2>/dev/null || echo "desconocida"
+    elif command -v python3 &>/dev/null; then
+      python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" \
+        "$INSTALL_DIR/resources/app/package.json" 2>/dev/null || echo "desconocida"
+    else
+      echo "desconocida"
+    fi
   else
     echo ""
   fi
 }
 
-get_remote_version() {
-  # HEAD request para obtener el ETag o Last-Modified como indicador de version
-  local headers
-  headers=$(curl --proto '=https' --tlsv1.2 -sfI "$DOWNLOAD_URL" 2>/dev/null)
-  echo "$headers" | grep -i 'etag' | tr -d '"' | awk '{print $2}' | tr -d '\r'
+fetch_metadata() {
+  # Descarga metadata JSON y extrae URL del tarball y version remota
+  local meta
+  meta=$(curl --proto '=https' --tlsv1.2 -sf --connect-timeout 10 "$METADATA_URL" 2>/dev/null) || {
+    warn "No se pudo obtener metadata de Kiro"
+    return 1
+  }
+
+  if command -v jq &>/dev/null; then
+    REMOTE_VERSION=$(echo "$meta" | jq -r '.currentRelease // empty')
+    DOWNLOAD_URL=$(echo "$meta" | jq -r '.releases[].updateTo.url | select(endswith(".tar.gz"))' | head -1)
+  elif command -v python3 &>/dev/null; then
+    REMOTE_VERSION=$(echo "$meta" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('currentRelease',''))")
+    DOWNLOAD_URL=$(echo "$meta" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for r in d.get('releases',{}).values() if isinstance(d.get('releases'),dict) else d.get('releases',[]):
+    url=r.get('updateTo',{}).get('url','')
+    if url.endswith('.tar.gz'):
+        print(url); break
+")
+  else
+    die "Se requiere jq o python3 para parsear metadata"
+  fi
+
+  [ -z "$DOWNLOAD_URL" ] && die "No se encontro URL del tarball en metadata"
+}
+
+save_version_info() {
+  # Guardar version desde package.json
+  if [ -f "$INSTALL_DIR/resources/app/package.json" ]; then
+    if command -v jq &>/dev/null; then
+      jq -r '.version' "$INSTALL_DIR/resources/app/package.json" > "$VERSION_FILE" 2>/dev/null || true
+    elif command -v python3 &>/dev/null; then
+      python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" \
+        "$INSTALL_DIR/resources/app/package.json" > "$VERSION_FILE" 2>/dev/null || true
+    fi
+  fi
 }
 
 do_install() {
@@ -104,40 +159,45 @@ do_install() {
     [[ "$CONFIRM" == "s" ]] || return 0
   fi
 
+  # Obtener URL de descarga desde metadata
+  fetch_metadata
+  info "Version remota: $REMOTE_VERSION"
+
   local TMP_DIR
-  TMP_DIR=$(sudo -u "$USERNAME" mktemp -d)
+  TMP_DIR=$(as_user mktemp -d)
+  # Limpiar temporal al salir (exito o error)
+  trap "rm -rf '$TMP_DIR'" EXIT
 
   info "Descargando Kiro IDE desde AWS..."
-  sudo -u "$USERNAME" curl --proto '=https' --tlsv1.2 -fSL \
+  as_user curl --proto '=https' --tlsv1.2 -fSL \
     --connect-timeout 15 --retry 3 \
     "$DOWNLOAD_URL" -o "$TMP_DIR/kiro.tar.gz"
   ok "Descarga completada"
+
+  # Verificar que el tarball es valido
+  if ! tar -tzf "$TMP_DIR/kiro.tar.gz" &>/dev/null; then
+    die "El archivo descargado esta corrupto o no es un tarball valido"
+  fi
 
   # Limpiar instalacion anterior si existe
   [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
 
   info "Instalando en $INSTALL_DIR..."
-  sudo -u "$USERNAME" mkdir -p "$INSTALL_DIR"
-  sudo -u "$USERNAME" tar -xzf "$TMP_DIR/kiro.tar.gz" -C "$INSTALL_DIR" --strip-components=1
+  as_user mkdir -p "$INSTALL_DIR"
+  as_user tar -xzf "$TMP_DIR/kiro.tar.gz" -C "$INSTALL_DIR" --strip-components=1 --no-same-owner
 
-  # Guardar version
-  if [ -f "$INSTALL_DIR/resources/app/package.json" ]; then
-    python3 -c "import json;print(json.load(open('$INSTALL_DIR/resources/app/package.json'))['version'])" > "$VERSION_FILE" 2>/dev/null
-  fi
+  save_version_info
 
-  # Guardar ETag para comparar en updates
-  curl --proto '=https' --tlsv1.2 -sfI "$DOWNLOAD_URL" 2>/dev/null | \
-    grep -i 'etag' > "$INSTALL_DIR/.kiro-etag" 2>/dev/null || true
-
+  # Limpiar temporal (trap tambien lo hara, pero por claridad)
   rm -rf "$TMP_DIR"
+  trap - EXIT
 
-  # Symlink
-  sudo -u "$USERNAME" mkdir -p "$BIN_DIR"
+  # Symlink al ejecutable
+  as_user mkdir -p "$BIN_DIR"
   ln -sf "$INSTALL_DIR/kiro" "$BIN_DIR/kiro"
 
   # Desktop entry
-  sudo -u "$USERNAME" mkdir -p "$DESKTOP_DIR"
-  # Buscar icono en ubicaciones conocidas
+  as_user mkdir -p "$DESKTOP_DIR"
   local ICON="$INSTALL_DIR/resources/app/resources/linux/code.png"
   [ ! -f "$ICON" ] && ICON="kiro"
 
@@ -145,7 +205,7 @@ do_install() {
 [Desktop Entry]
 Name=Kiro
 Comment=Agentic AI IDE by AWS
-Exec=$INSTALL_DIR/kiro --ozone-platform-hint=auto %F
+Exec=$INSTALL_DIR/kiro %F
 Icon=$ICON
 Terminal=false
 Type=Application
@@ -154,9 +214,21 @@ Categories=Development;IDE;
 StartupNotify=true
 StartupWMClass=kiro
 EOF
-  chown "$USERNAME:users" "$DESKTOP_DIR/kiro.desktop"
 
-  chown -R "$USERNAME:users" "$INSTALL_DIR" "$BIN_DIR/kiro"
+  # Electron flags para Wayland nativo + GPU
+  # ELECTRON_OZONE_PLATFORM_HINT=wayland ya esta en /etc/environment
+  # Estos flags complementan: aceleracion GPU y rendering nativo
+  as_user mkdir -p "$HOME_DIR/.config"
+  cat > "$HOME_DIR/.config/kiro-flags.conf" <<'FLAGS'
+--enable-features=UseOzonePlatform,WaylandWindowDecorations,WebRTCPipeWireCapturer
+--ozone-platform-hint=wayland
+--enable-wayland-ime
+--disable-gpu-sandbox
+FLAGS
+
+  # Permisos consistentes
+  set_owner "$INSTALL_DIR" "$BIN_DIR/kiro" "$DESKTOP_DIR/kiro.desktop"
+  [ -f "$HOME_DIR/.config/kiro-flags.conf" ] && set_owner "$HOME_DIR/.config/kiro-flags.conf"
 
   ok "Kiro IDE instalado (version: $(get_installed_version))"
 }
@@ -166,23 +238,20 @@ do_update() {
 
   local current_ver
   current_ver=$(get_installed_version)
-  info "Version instalada: $current_ver"
+  info "Version instalada: ${current_ver:-desconocida}"
 
   info "Verificando actualizaciones..."
-  local remote_etag local_etag
-  remote_etag=$(get_remote_version)
-  local_etag=""
-  [ -f "$INSTALL_DIR/.kiro-etag" ] && local_etag=$(grep -i 'etag' "$INSTALL_DIR/.kiro-etag" | tr -d '"' | awk '{print $2}' | tr -d '\r')
+  fetch_metadata || { warn "No se pudo verificar — intenta mas tarde"; return 1; }
 
-  if [ -n "$remote_etag" ] && [ "$remote_etag" = "$local_etag" ]; then
-    ok "Ya tienes la ultima version"
+  if [ -n "$current_ver" ] && [ "$current_ver" = "$REMOTE_VERSION" ]; then
+    ok "Ya tienes la ultima version ($current_ver)"
     return 0
   fi
 
-  if [ -n "$remote_etag" ]; then
-    info "Actualizacion disponible"
+  if [ -n "$REMOTE_VERSION" ]; then
+    info "Actualizacion disponible: $current_ver → $REMOTE_VERSION"
   else
-    warn "No se pudo verificar version remota — reinstalando por seguridad"
+    warn "No se pudo determinar version remota — reinstalando por seguridad"
   fi
 
   read -rp "  Actualizar ahora? [s/N]: " CONFIRM
